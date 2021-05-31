@@ -2,8 +2,17 @@ import pandas as pd
 import numpy as np 
 import tqdm
 from plotly.subplots import make_subplots
+from binance.client import Client 
 
 class wallet:
+            # ''' 
+            # Required variable is starting cash. 
+            # Example to instantiate: test_wallet = cbt.wallet(10000)
+            
+            # This object is the wallet that will keep track of your positions and portfolio value. All of the theoretical trades are executed using this class. The trade strategy
+            # is defined elsewhere 
+            # '''
+
     def __init__(self,starting_cash):
                 
         self.starting_cash = float(starting_cash)
@@ -76,7 +85,7 @@ class wallet:
         
         
         now = time
-#         now = now.strftime("%d/%m/%Y %H:%M:%S")
+
         
 
         self.journal[0].append(now)
@@ -215,6 +224,17 @@ class wallet:
 
     
 class backtest:
+        # ''' 
+        # Required variable is warm up period, the dataframe containing the historical data, the wallet object, and the ticker.
+
+        # example: sma_exp = btc.backtest(1000,data_df,btc_wallet,'btc')
+
+
+        # Currently a strategy is hardcoded in to here. I would like to make this take a function as an argument and then use that function throughout the backtesting logic.
+
+        # '''
+
+
     
     def __init__(self, warm_up, data, wallet,ticker):
         
@@ -280,3 +300,57 @@ class backtest:
             # when non of the buy or sell requirments are met, follow the usual update account value protocol
             else:
                 self.wallet.update_act_value_simple(price,time)
+
+
+
+class trading_strategy:
+    # '''
+    # I would like to potentially use this as a class to pass to the backtester. Its where you will define the trading logic
+    # '''
+    
+    def __init__(self):
+        self.placeholder = 1
+        
+
+        
+
+class data_downloader:
+
+    def __init__(self, start_date, end_date):
+
+        self.start_date = start_date
+        self.end_date = end_date
+
+
+    def get_available_coins(self):
+        api_key=''
+        api_secret=''
+        client = Client(api_key=api_key,api_secret=api_secret)
+
+
+        a_coins = client.get_all_tickers()
+        coin_list = []
+        for dictionary in a_coins:
+            coin_list.append(dictionary['symbol'])
+
+        coin_list.sort()
+
+        return coin_list
+
+    
+    def get_data(self, coin):
+
+        api_key=''
+        api_secret=''
+        client = Client(api_key=api_key,api_secret=api_secret)
+        
+        for c in coin:
+            print(f'Gathering {c} data...')
+            data = client.get_historical_klines(symbol=f'{c}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=self.start_date,end_str=self.end_date)
+            cols = ['time','open','high','low','close','volume','CloseTime','QuoteAssetVolume','NumberOfTrades','TBBAV','TBQAV','null']
+            df = pd.DataFrame(data,columns=cols)
+            return df
+
+
+
+
