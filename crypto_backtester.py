@@ -5,13 +5,14 @@ from plotly.subplots import make_subplots
 from binance.client import Client 
 
 class wallet:
-            # ''' 
-            # Required variable is starting cash. 
-            # Example to instantiate: test_wallet = cbt.wallet(10000)
-            
-            # This object is the wallet that will keep track of your positions and portfolio value. All of the theoretical trades are executed using this class. The trade strategy
-            # is defined elsewhere 
-            # '''
+    ''' 
+    Required variable is starting cash. 
+
+    Example to instantiate: test_wallet = cbt.wallet(10000)
+    
+    This object is the wallet that will keep track of your positions and portfolio value. All of the theoretical trades are executed using this class. The trade strategy
+    is defined elsewhere 
+    '''
 
     def __init__(self,starting_cash):
                 
@@ -224,15 +225,14 @@ class wallet:
 
     
 class backtest:
-        # ''' 
-        # Required variable is warm up period, the dataframe containing the historical data, the wallet object, and the ticker.
+    ''' 
+    Required variable is warm up period, the dataframe containing the historical data, the wallet object, and the ticker.
 
-        # example: sma_exp = btc.backtest(1000,data_df,btc_wallet,'btc')
+    example: sma_exp = btc.backtest(1000,data_df,btc_wallet,'btc')
 
+    Currently a strategy is hardcoded in to here. I would like to make this take a function as an argument and then use that function throughout the backtesting logic.
 
-        # Currently a strategy is hardcoded in to here. I would like to make this take a function as an argument and then use that function throughout the backtesting logic.
-
-        # '''
+    '''
 
 
     
@@ -278,7 +278,6 @@ class backtest:
                 self.wallet.update_act_value_simple(price,time)
                 print('position already held, moving to next epoch')
 
-                
             elif self.wallet.act_holdings and sma_check < 0:
                 #get the trade id on this step....maybe write this as a stand alone function in the wallet class
                 trade_id = self.wallet.get_trade_id_simple()
@@ -314,7 +313,13 @@ class trading_strategy:
 
         
 
-class data_downloader:
+class data_downloader:   
+    '''
+    This utilizes the binance api and downloads minute data given a start and an end date.
+    Example start date format: '1 Apr, 2021'
+    Example Call: dl = cbt.data_downloader('1 Apr, 2021', '5 Apr, 2021')
+
+    '''
 
     def __init__(self, start_date, end_date):
 
