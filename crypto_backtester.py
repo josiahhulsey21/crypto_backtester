@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np 
 import tqdm
 from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 from binance.client import Client 
 
 class wallet:
@@ -255,7 +256,7 @@ class backtest:
     def run_backtest(self):
         ''' may need to clear the journals and account before running this???'''
         
-        for index, row in self.data.iterrows():
+        for index, row in tqdm.tqdm(self.data.iterrows()):
             
             #get the current price in case you need to pass it to a buy or sell function
             price = row["close"]
@@ -304,6 +305,8 @@ class backtest:
 
 class trading_strategy:
     # '''
+    #maybe a class really isnt the best option here. Maybe just feeding the backtester the testing function is better.
+
     # I would like to potentially use this as a class to pass to the backtester. Its where you will define the trading logic
     # '''
     
