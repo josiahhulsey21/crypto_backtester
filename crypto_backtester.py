@@ -31,15 +31,21 @@ class wallet:
         self.act_holdings = []
         
         #this will be for journaling the moves
-        self.journal =[[],[],[],[],[],[],[]]     
+        self.journal =[[],[],[],[],[],[],[],[],[],[]]     
         
     
     
-    def add_holding(self, ticker, price, time):
+    def add_holding(self, ticker, price, time, stop_loss = .05, take_profit = .05):
         
         price_purchased = price
         ammount_purchased = self.starting_cash/price
         sum_price = price_purchased * ammount_purchased
+
+        stop_loss_price = price_purchased - (price_purchased * stop_loss)
+        take_profit_price = price_purchased + (price_purchased * take_profit)
+        cooldown = 0
+
+
         
         now = time
 #         now = now.strftime("%d/%m/%Y %H:%M:%S")
@@ -61,7 +67,11 @@ class wallet:
         self.journal[4].append(ammount_purchased)
         self.journal[5].append(sum_price)
         self.journal[6].append(trade_id)
-    
+        self.journal[7].append(stop_loss_price)
+        self.journal[8].append(take_profit_price)
+        self.journal[9].append(cooldown)
+        
+        
     
     def sell_holding(self,trade_id, price, time):
         
@@ -97,7 +107,10 @@ class wallet:
         self.journal[4].append(ammount_sold)
         self.journal[5].append(sum_price)
         self.journal[6].append(trade_id)
-    
+        self.journal[7].append(0)
+        self.journal[8].append(0)
+        self.journal[9].append(0)
+        
     
     
     
@@ -107,7 +120,8 @@ class wallet:
         df = pd.DataFrame({'date':self.journal[0],'action':self.journal[1], 
                            'ticker':self.journal[2], 'price':self.journal[3],
                           'ammount':self.journal[4],'total_price': self.journal[5],
-                          'trade_id':self.journal[6]})
+                          'trade_id':self.journal[6], 'stop_loss_price':self.journal[7],
+                          'take_profit_price':self.journal[8], 'cooldown':self.journal[9]})
         return df
         print(df)
         
