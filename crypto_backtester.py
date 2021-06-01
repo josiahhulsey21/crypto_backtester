@@ -4,6 +4,8 @@ import tqdm
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from binance.client import Client 
+from datetime import datetime
+
 
 class wallet:
     ''' 
@@ -53,7 +55,7 @@ class wallet:
         trade_id = f'{ticker}{now}'
 
         
-        buy_dictionary = {'trade_id':trade_id,'ticker':ticker, 'price':price, 'ammount':ammount_purchased}
+        buy_dictionary = {'trade_id':trade_id,'ticker':ticker, 'price':price, 'ammount':ammount_purchased,'stop_loss':stop_loss_price, 'take_profit':take_profit_price,'cooldown':cooldown}
         self.act_holdings.append(buy_dictionary)
 
         #update cash position
@@ -95,10 +97,7 @@ class wallet:
         
         del self.act_holdings[0]
         
-        
         now = time
-
-        
 
         self.journal[0].append(now)
         self.journal[1].append('sell')
@@ -111,9 +110,32 @@ class wallet:
         self.journal[8].append(0)
         self.journal[9].append(0)
         
-    
-    
-    
+
+
+    def update_cooldown(self,trade_id):
+
+        #function not finished. Need to figure out how to get the trade id in here
+        
+        cooldown = self.act_holdings[9]['cooldown']
+        cooldown = cooldown - 1
+        print(cooldown)
+        print('cool down triggered')
+        
+        
+        # self.act_holdings[9]['ammount'].update
+        # d.update(y = 3, z = 0)
+
+        
+
+
+
+
+
+
+
+
+
+
     def print_journal(self):
         ''' This will print out the journal for the wallet as a df. If it has been backtested, this will contain all
         of the buy/sells. At the moment the time is broken. It records current time instead of backtest time.'''
@@ -371,6 +393,10 @@ class data_downloader:
             data = client.get_historical_klines(symbol=f'{c}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=self.start_date,end_str=self.end_date)
             cols = ['time','open','high','low','close','volume','CloseTime','QuoteAssetVolume','NumberOfTrades','TBBAV','TBQAV','null']
             df = pd.DataFrame(data,columns=cols)
+            
+            for i in range(len(df)):
+                df['time'][i] = datetime.fromtimestamp(int(df['time'][i]/1000))           
+                       
             return df
 
 
