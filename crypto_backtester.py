@@ -9,7 +9,8 @@ from datetime import datetime
 
 class wallet:
     ''' 
-    Required variable is starting cash. 
+    Required variable is starting cash. This wallet is meant to only test a strategy on one coin. I think having a separate class for a portfolio test is the best way to tackle
+    that problem. When I get there I will have to clean some of the logic out of this class because I initially thought I could do it all in one class.
 
     Example to instantiate: test_wallet = cbt.wallet(10000)
     
@@ -41,6 +42,12 @@ class wallet:
     
     
     def add_holding(self, ticker, price, time, stop_loss = .05, take_profit = .05):
+        '''
+        This is the main function that will add holdings to the wallet.
+        * ticker, price, time are all required arguments
+        * default stop loss is set to .05. You can obviously change this if you pass in a different value in your trading logic
+        * default take profit is set to .05. You can obviously change this if you pass in a different value in your trading logic
+        '''
         
         price_purchased = price
         ammount_purchased = self.starting_cash/price
@@ -78,6 +85,13 @@ class wallet:
         
     
     def sell_holding(self,trade_id, price, time):
+
+        '''
+        This is the primary function that is used to sell coins. 
+        Required inputs are trade id, price, and time  (all to be passed in the trading algo)
+        '''
+
+
         
         #i dont know if this is actually needed..... i guess for journaling
         trade_id_test = trade_id
@@ -116,7 +130,8 @@ class wallet:
 
     def initiate_cooldown(self, cd_period = 1000):
         '''
-        Function that will iniate a cool down period. Defaults to 1000 timesteps. can set this to whatever
+        Function that will iniate a cool down period. Defaults to 1000 timesteps. can set this to whatever. Can even set them unevenly if you wanted to! doesnt have to be the same
+        for each reason you initiate a cool down
         '''
         self.cooldown = self.cooldown + cd_period
 
@@ -131,11 +146,51 @@ class wallet:
             pass
         
 
+    def check_stop_loss(self, current_price, time):
+        '''
+        Function that checks to see if a stop loss has been crossed and sells if it has
+        need to have the trading algo pass the current price and current time
+        '''
+
+        #need to check make sure you actually own something before calling this!
+
+        if self.act_holdings:
+
+            trade_id = self.get_trade_id_simple()
+
+
+            if current_price <= self.act_holdings[0]['stop_loss']:
+                #call your function that sells the holding. Price and time need to be passed in the algo function
+                self.sell_holding(trade_id, current_price, time)
+                #initiate cooldown
+                self.initiate_cooldown()
+                print('Stop Loss Triggered')
+
+
+
+    def check_take_profit(self, current_price, time):
+        '''
+        Function that checks to see if a take profit event has been crossed and sells if it has
+        need to have the trading algo pass the current price and current time
+        '''
+        #need to check make sure you actually own something before calling this!
+        if self.act_holdings:
+
+            trade_id = self.get_trade_id_simple()
+
+            if current_price >= self.act_holdings[0]['take_profit']:
+                #call your function that sells the holding. Price and time need to be passed in the algo function
+                self.sell_holding(trade_id, current_price, time)
+                #initiate cooldown
+                self.initiate_cooldown()
+                print('Take Profits Triggered')
+
 
 
     def print_journal(self):
         ''' This will print out the journal for the wallet as a df. If it has been backtested, this will contain all
         of the buy/sells. At the moment the time is broken. It records current time instead of backtest time.'''
+        
         df = pd.DataFrame({'date':self.journal[0],'action':self.journal[1], 
                            'ticker':self.journal[2], 'price':self.journal[3],
                           'ammount':self.journal[4],'total_price': self.journal[5],
@@ -147,7 +202,10 @@ class wallet:
         
     
     def update_act_value_simple(self,price, time):
-        '''Price, ammount, time are the variables in that order'''
+        '''
+        Function that updates the account value
+        Price, ammount, time are the variables in that order
+        '''
 
         if self.act_holdings:
             ammount = self.act_holdings[0]['ammount']
@@ -194,7 +252,7 @@ class wallet:
         fig.add_trace(go.Scatter(x = time, y = act_value, line_color = 'blue', name = 'Account Value'))
 
         #add index price
-        fig.add_trace(go.Scatter(x = df['time'], y = df['close'], line_color = 'black', name = 'Security Price'),
+        fig.add_trace(go.Scatter(x = df['time'], y = df['close'], line_color = 'black', name = 'Coin Price'),
         secondary_y = True)
         
         #add buy signals
@@ -207,8 +265,8 @@ class wallet:
         
         fig.show()
         
-        print(f'the strategy returned {1-(self.account_value_history[1][0]/self.account_value_history[1][-1])}%')
-        print(f'the traded coin returned {1-(df.close.iloc[0]/df.close.iloc[-1])}%')
+        print(f'the strategy returned {round(1-(self.account_value_history[1][0]/self.account_value_history[1][-1]),2)}%')
+        print(f'the traded coin returned {round(1-(df.close.iloc[0]/df.close.iloc[-1]),2)}%')
 
         
         
@@ -302,11 +360,15 @@ class backtest:
 
             sma_check = price - sma_value
 
-            #check to see if you are in cool down mode
+            #check to see if you are in cool down mode or if you have encountered stop loss or take profits. Probably should move the cooldown check into a function
+            self.wallet.check_stop_loss(price,time)
+            self.wallet.check_take_profit(price,time)
             if self.wallet.cooldown > 0:
                 self.wallet.update_cooldown()
-                print('updating cooldown value')
-            
+                # print('updating cooldown value')
+
+
+            #If you pass the above criteria, implement the trade logic you want
             else:
                 #check to see if the current price is above the sma and if you currently hold any btc
                 if not self.wallet.act_holdings and sma_check > 0 and roc_value > 105.0:
@@ -316,7 +378,7 @@ class backtest:
                     
                 elif self.wallet.act_holdings and sma_check > 0:
                     self.wallet.update_act_value_simple(price,time)
-                    print('position already held, moving to next epoch')
+                    # print('position already held, moving to next epoch')
 
                 elif self.wallet.act_holdings and sma_check < 0:
                     #get the trade id on this step....maybe write this as a stand alone function in the wallet class
@@ -343,7 +405,7 @@ class backtest:
     
                 elif not self.wallet.act_holdings and sma_check < 0:     
                     self.wallet.update_act_value_simple(price,time)
-                    print('bear market, moving to next epoch')        
+                    # print('bear market, moving to next epoch')        
                 
                 # when non of the buy or sell requirments are met, follow the usual update account value protocol
                 else:
