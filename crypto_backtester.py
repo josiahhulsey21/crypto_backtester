@@ -34,6 +34,9 @@ class wallet:
         
         #this will be for journaling the moves
         self.journal =[[],[],[],[],[],[],[],[],[],[]]     
+
+        #this variable is used in the functions that will force the algo to take a break should you tell it to.
+        self.cooldown = 0
         
     
     
@@ -50,11 +53,10 @@ class wallet:
 
         
         now = time
-#         now = now.strftime("%d/%m/%Y %H:%M:%S")
         
         trade_id = f'{ticker}{now}'
 
-        
+
         buy_dictionary = {'trade_id':trade_id,'ticker':ticker, 'price':price, 'ammount':ammount_purchased,'stop_loss':stop_loss_price, 'take_profit':take_profit_price,'cooldown':cooldown}
         self.act_holdings.append(buy_dictionary)
 
@@ -112,27 +114,22 @@ class wallet:
         
 
 
-    def update_cooldown(self,trade_id):
+    def initiate_cooldown(self, cd_period = 1000):
+        '''
+        Function that will iniate a cool down period. Defaults to 1000 timesteps. can set this to whatever
+        '''
+        self.cooldown = self.cooldown + cd_period
 
-        #function not finished. Need to figure out how to get the trade id in here
+
+    def update_cooldown(self):
+        '''
+        Function that updates the cooldown period if it is not 0. Subtracts 1 from the cooldown if it the cooldown value is greater than 0
+        '''
+        if self.cooldown > 0:
+            self.cooldown = self.cooldown - 1
+        else:
+            pass
         
-        cooldown = self.act_holdings[9]['cooldown']
-        cooldown = cooldown - 1
-        print(cooldown)
-        print('cool down triggered')
-        
-        
-        # self.act_holdings[9]['ammount'].update
-        # d.update(y = 3, z = 0)
-
-        
-
-
-
-
-
-
-
 
 
 
@@ -304,38 +301,53 @@ class backtest:
 #             print(roc_value)
 
             sma_check = price - sma_value
-                 
-            #check to see if the current price is above the sma and if you currently hold any btc
-            if not self.wallet.act_holdings and sma_check > 0 and roc_value > 105.0:
-                self.wallet.add_holding(self.ticker, price, time)
-                self.wallet.update_act_value_simple(price,time)
-                print('creating position')
-                
-            elif self.wallet.act_holdings and sma_check > 0:
-                self.wallet.update_act_value_simple(price,time)
-                print('position already held, moving to next epoch')
 
-            elif self.wallet.act_holdings and sma_check < 0:
-                #get the trade id on this step....maybe write this as a stand alone function in the wallet class
-                trade_id = self.wallet.get_trade_id_simple()
-                self.wallet.sell_holding(trade_id, price,time)                
-                self.wallet.update_act_value_simple(price,time)
-                print('market turning, selling position')
-
-            elif self.wallet.act_holdings and roc_value < 102:
-                #get the trade id on this step....maybe write this as a stand alone function in the wallet class
-                trade_id = self.wallet.get_trade_id_simple()
-                self.wallet.sell_holding(trade_id, price,time)                
-                self.wallet.update_act_value_simple(price,time)
-                print('Rally finished, selling position') 
-   
-            elif not self.wallet.act_holdings and sma_check < 0:     
-                self.wallet.update_act_value_simple(price,time)
-                print('bear market, moving to next epoch')        
+            #check to see if you are in cool down mode
+            if self.wallet.cooldown > 0:
+                self.wallet.update_cooldown()
+                print('updating cooldown value')
             
-            # when non of the buy or sell requirments are met, follow the usual update account value protocol
             else:
-                self.wallet.update_act_value_simple(price,time)
+                #check to see if the current price is above the sma and if you currently hold any btc
+                if not self.wallet.act_holdings and sma_check > 0 and roc_value > 105.0:
+                    self.wallet.add_holding(self.ticker, price, time)
+                    self.wallet.update_act_value_simple(price,time)
+                    print('creating position')
+                    
+                elif self.wallet.act_holdings and sma_check > 0:
+                    self.wallet.update_act_value_simple(price,time)
+                    print('position already held, moving to next epoch')
+
+                elif self.wallet.act_holdings and sma_check < 0:
+                    #get the trade id on this step....maybe write this as a stand alone function in the wallet class
+                    trade_id = self.wallet.get_trade_id_simple()
+                    self.wallet.sell_holding(trade_id, price,time)
+                    self.wallet.update_act_value_simple(price,time)
+                    
+                    
+                    #testing cooldown feature. having the algo wait 1000 minutes before it re-enters the market after it sells a position
+                    self.wallet.initiate_cooldown()
+
+                    print('market turning, selling position. Initiated Cooldown')
+
+                elif self.wallet.act_holdings and roc_value < 102:
+                    #get the trade id on this step....maybe write this as a stand alone function in the wallet class
+                    trade_id = self.wallet.get_trade_id_simple()
+                    self.wallet.sell_holding(trade_id, price,time)                
+                    self.wallet.update_act_value_simple(price,time)
+                    
+                    #testing cooldown feature. having the algo wait 1000 minutes before it re-enters the market after it sells a position
+                    self.wallet.initiate_cooldown()
+                    
+                    print('Rally finished, selling position. Initiated Cooldown.') 
+    
+                elif not self.wallet.act_holdings and sma_check < 0:     
+                    self.wallet.update_act_value_simple(price,time)
+                    print('bear market, moving to next epoch')        
+                
+                # when non of the buy or sell requirments are met, follow the usual update account value protocol
+                else:
+                    self.wallet.update_act_value_simple(price,time)
 
 
 
