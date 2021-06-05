@@ -197,6 +197,35 @@ class wallet:
 
 
 
+    def dynamic_stop_loss(self, current_price, floor_shift = .01):
+        
+        '''
+        Function that updates the stop loss to protect profits. It will dynamically change the stop loss once the price gets above your take profits threshold.
+        This function also modifies the take profits value for the trade (even though it wont ever be used in the actual trading algo).
+        
+        Floor shift variable is the variable that will be used to adjust the stop loss. Its default is set to one percent below the current price. This can be changed 
+        You probably dont want to have it set at the current price due to volatility.
+        '''
+        
+        if self.act_holdings:
+
+            trade_id = self.get_trade_id_simple()
+
+            if current_price >= self.act_holdings[0]['take_profit']:
+                
+                new_sl = current_price - (current_price * floor_shift)
+                new_tp = current_price + (current_price * floor_shift)
+                
+                self.act_holdings[0]['stop_loss'] = new_sl
+                self.act_holdings[0]['take_profit'] = new_sl
+
+                print('Updated Stop Loss to protect profits')
+
+
+
+
+
+
     def print_journal(self):
         ''' This will print out the journal for the wallet as a df. If it has been backtested, this will contain all
         of the buy/sells. At the moment the time is broken. It records current time instead of backtest time.'''
@@ -374,9 +403,9 @@ class backtest:
             
             #maybe have this return a number and use that as the if statement?
             # self.wallet.check_cooldown()
-
+            self.wallet.dynamic_stop_loss(price)
             self.wallet.check_stop_loss(price,time)
-            self.wallet.check_take_profit(price,time)
+            # self.wallet.check_take_profit(price,time)
             if self.wallet.cooldown > 0:
                 self.wallet.update_cooldown()
                 # print('updating cooldown value')
