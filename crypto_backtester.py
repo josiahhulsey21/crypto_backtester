@@ -146,6 +146,16 @@ class wallet:
             pass
         
 
+    def check_cooldown(self):
+        ''' 
+        Function that checks to see if the cool down is above 0 and then updates the cooldown if it is. At the moment
+        this function isnt actually used in the code anywhere!
+        '''
+        if self.cooldown > 0:
+            self.update_cooldown()
+
+
+
     def check_stop_loss(self, current_price, time):
         '''
         Function that checks to see if a stop loss has been crossed and sells if it has
@@ -361,6 +371,10 @@ class backtest:
             sma_check = price - sma_value
 
             #check to see if you are in cool down mode or if you have encountered stop loss or take profits. Probably should move the cooldown check into a function
+            
+            #maybe have this return a number and use that as the if statement?
+            # self.wallet.check_cooldown()
+
             self.wallet.check_stop_loss(price,time)
             self.wallet.check_take_profit(price,time)
             if self.wallet.cooldown > 0:
