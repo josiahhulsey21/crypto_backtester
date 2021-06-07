@@ -5,7 +5,7 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from binance.client import Client 
 from datetime import datetime
-
+import sqlite3
 
 class wallet:
     ''' 
@@ -464,6 +464,9 @@ class data_downloader:
 
 
     def get_available_coins(self):
+        '''
+        This function will return a list of all available coins on Binance sorted alphabetically
+        '''
         api_key=''
         api_secret=''
         client = Client(api_key=api_key,api_secret=api_secret)
@@ -491,16 +494,24 @@ class data_downloader:
         for c in coin:
             print(f'Gathering {c} data...')
             data = client.get_historical_klines(symbol=f'{c}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=self.start_date,end_str=self.end_date)
-            cols = ['time','open','high','low','close','volume','CloseTime','QuoteAssetVolume','NumberOfTrades','TBBAV','TBQAV','dropme']
+            cols = ['date_and_time','open','high','low','close','volume','CloseTime','QuoteAssetVolume','NumberOfTrades','TBBAV','TBQAV','dropme']
             df = pd.DataFrame(data,columns=cols)
             df.drop(['dropme'], inplace = True, axis = 1)
             
             # for whatever reason, most of the columns come in as strings when you download from binance. This converts to floats. You have to have time come in as an object for the for loop
             # to work!!!
-            df = df.astype({'time':object,'open': float,'high':float,'low':float,'close':float,'volume':float, 'QuoteAssetVolume':float,'TBBAV':float,'TBQAV':float})
+            df = df.astype({'date_and_time':object,'open': float,'high':float,'low':float,'close':float,'volume':float, 'QuoteAssetVolume':float,'TBBAV':float,'TBQAV':float})
             
+            #this is for the database
+            df['coin'] = c
+            df['db_key'] = df['coin']+df['date_and_time'].astype('string')
+
+
             for i in range(len(df)):
-                df['time'][i] = datetime.fromtimestamp(int(df['time'][i]/1000))           
+                df['date_and_time'][i] = datetime.fromtimestamp(int(df['date_and_time'][i]/1000))
+
+            df['date'] = [d.date() for d in df['date_and_time']]
+            df['time'] = [d.time() for d in df['date_and_time']]           
                        
             return df
 
@@ -508,9 +519,39 @@ class data_downloader:
 
 
 
+def create_database(directory, db_name):
 
-def create_database(filepath):
-    pass
+    '''
+    This function creates a database in a given directory with a given name. The database is setup to work well with the logic of the backtester. You are free to edit
+    it as you choose, but using any functions outside the provided one may lead to performance problems!
+    '''
+    
+    full_db = f'{directory}\{db_name}.db'
+    con = sqlite3.connect(full_db)
+    cur = con.cursor()
+
+    cur.execute(""" CREATE TABLE IF NOT EXISTS historical_coin_data(
+        "id" TEXT PRIMARY KEY,
+        "coin" TEXT,
+        "date" TEXT,
+        "time" TEXT,
+        "date_and_time" TEXT,
+        "open" REAL,
+        "high" REAL,
+        "low" REAL,
+        "close" REAL,
+        "volume" REAL,
+        "close_time" TEXT,
+        "quote_asset_volume" REAL,
+        "number_of_trades" INTEGER,
+        "tbbav" REAL,
+        "tbqav" REAL);""")
+
+    con.commit()
+    cur.close()
+    con.close()
+
+    print(f'Created a sqlite database named {db_name} in {directory}')
 
 def update_database(filepath):
     pass
