@@ -219,10 +219,7 @@ class wallet:
                 self.act_holdings[0]['stop_loss'] = new_sl
                 self.act_holdings[0]['take_profit'] = new_sl
 
-                print('Updated Stop Loss to protect profits')
-
-
-
+                # print('Updated Stop Loss to protect profits')
 
 
 
@@ -357,7 +354,7 @@ class wallet:
     
 class backtest:
     ''' 
-    Required variable is warm up period, the dataframe containing the historical data, the wallet object, and the ticker.
+    Required variable is the dataframe containing the historical data, the wallet object, and the ticker. Automatically drops rows with NA in them
 
     example: sma_exp = btc.backtest(1000,data_df,btc_wallet,'btc')
 
@@ -367,20 +364,14 @@ class backtest:
 
 
     
-    def __init__(self, warm_up, data, wallet,ticker):
+    def __init__(self, data, wallet,ticker):
         
         self.wallet = wallet
-        self.warm_up = warm_up
+  
         self.data = data
         self.ticker = ticker
-        
-        self.data = self.data.iloc[warm_up:]
-        
-        #
-        self.total_epochs = len(self.data)
-        
-        
-    
+        self.data.dropna(inplace = True)
+        self.total_epochs = len(self.data)  
     
     
     def run_backtest(self):
@@ -453,21 +444,10 @@ class backtest:
                 # when non of the buy or sell requirments are met, follow the usual update account value protocol
                 else:
                     self.wallet.update_act_value_simple(price,time)
-
-
-
-class trading_strategy:
-    # '''
-    #maybe a class really isnt the best option here. Maybe just feeding the backtester the testing function is better.
-
-    # I would like to potentially use this as a class to pass to the backtester. Its where you will define the trading logic
-    # '''
-    
-    def __init__(self):
-        self.placeholder = 1
-        
-
-        
+#
+    def run_backtest_2(self, trade_logic):
+        trade_logic(self.wallet, self.data,self.ticker)
+       
 
 class data_downloader:   
     '''
@@ -500,6 +480,9 @@ class data_downloader:
 
     
     def get_data(self, coin):
+        '''
+        Function that downloads data using the binance API. you need to pass the coin in the form  of a list.....probably should fix that
+        '''
 
         api_key=''
         api_secret=''
@@ -508,8 +491,13 @@ class data_downloader:
         for c in coin:
             print(f'Gathering {c} data...')
             data = client.get_historical_klines(symbol=f'{c}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=self.start_date,end_str=self.end_date)
-            cols = ['time','open','high','low','close','volume','CloseTime','QuoteAssetVolume','NumberOfTrades','TBBAV','TBQAV','null']
+            cols = ['time','open','high','low','close','volume','CloseTime','QuoteAssetVolume','NumberOfTrades','TBBAV','TBQAV','dropme']
             df = pd.DataFrame(data,columns=cols)
+            df.drop(['dropme'], inplace = True, axis = 1)
+            
+            # for whatever reason, most of the columns come in as strings when you download from binance. This converts to floats. You have to have time come in as an object for the for loop
+            # to work!!!
+            df = df.astype({'time':object,'open': float,'high':float,'low':float,'close':float,'volume':float, 'QuoteAssetVolume':float,'TBBAV':float,'TBQAV':float})
             
             for i in range(len(df)):
                 df['time'][i] = datetime.fromtimestamp(int(df['time'][i]/1000))           
@@ -519,3 +507,13 @@ class data_downloader:
 
 
 
+
+
+def create_database(filepath):
+    pass
+
+def update_database(filepath):
+    pass
+
+def retrieve_data(filepath):
+    pass
