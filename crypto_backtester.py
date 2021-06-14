@@ -610,7 +610,6 @@ def update_database(filepath,data_frame):
     
     con = sqlite3.connect(filepath)
     cur = con.cursor() 
-
     
     for index, row in tqdm.tqdm(data_frame.iterrows()):
         
@@ -625,12 +624,68 @@ def update_database(filepath,data_frame):
         
         cur.execute(sqlite_insert_query, data_tuple)
 
-
     con.commit()
     cur.close()
     con.close()  
     print('Updated Database')
 
 
-def retrieve_data(filepath):
-    pass
+def retrieve_data_single_coin(db_file,coin):
+    '''
+    Function that returns all data for a given coin in your database
+    '''
+
+    con = sqlite3.connect(db_file)
+    cur = con.cursor() 
+
+    lu_coin = coin.upper()
+
+    df = pd.read_sql(f"SELECT * FROM historical_coin_data WHERE coin == '{lu_coin}'",con)
+
+    cur.close()
+    con.close()
+
+    return df
+
+
+def check_unique_db(db_file):
+    '''
+    Function that will return all the coins that you have stored in your database
+    '''
+
+    unique_list = []
+
+    #sql query that selects all of the unique values from the coin column
+    query = "SELECT DISTINCT(coin) FROM historical_coin_data"
+
+    con = sqlite3.connect(db_file)
+    cur = con.cursor() 
+
+    cur=con.execute(query)
+    for row in cur:
+        unique_list.append(row[0])
+    cur.close()
+    con.close()
+
+    return unique_list
+
+
+def get_data_by_date(db_file,start_date,end_date):
+    '''
+    Function that returns data from database using dates as a control
+    Expected date format is:  '2021-06-01'
+    '''
+
+    con = sqlite3.connect(db_file)
+    cur = con.cursor() 
+    
+    df = pd.read_sql(f"SELECT * FROM historical_coin_data WHERE date between date('{start_date}') AND date('{end_date}')",con)
+
+    cur.close()
+    con.close()
+
+    return df
+   
+
+
+
