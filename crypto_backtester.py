@@ -235,8 +235,7 @@ class wallet:
         return df
         print(df)
         
-        
-    
+
     def update_act_value_simple(self,price, time):
         '''
         Function that updates the account value
@@ -263,6 +262,52 @@ class wallet:
             self.account_value_history[1].append(self.account_value)       
         
 
+    def print_statistics(self):
+        lose_list = []
+        win_list = []
+
+        def Average(lst):
+            return sum(lst) / len(lst)
+
+        #this calls the print journal function......probably not good to have it print out every time. Can fix this
+        working_df = self.print_journal()
+
+
+        # https://stackoverflow.com/questions/22607324/start-end-and-duration-of-maximum-drawdown-in-python
+
+        ##not working!!!!
+        xs = np.array(self.account_value_history[1]).cumsum()
+        i = np.argmax(np.maximum.accumulate(xs) - xs) # end of the period
+        print(i)
+        # j = np.argmax(xs[:i]) # start of period
+        # print(xs)
+
+        for pair in working_df.trade_id.unique():
+            dfc = working_df.copy()
+            dfc = dfc[dfc['trade_id'] == pair]
+            
+            buy_price = dfc[dfc['action'] == 'buy'].total_price.max()
+            sell_price = dfc[dfc['action'] == 'sell'].total_price.max()
+            
+            trade_result = sell_price - buy_price
+            if trade_result < 0:
+                lose_list.append(trade_result)
+            elif trade_result > 0:
+                win_list.append(trade_result)   
+
+        print(f'the strategy returned {round(1-(self.account_value_history[1][0]/self.account_value_history[1][-1]),2)}%')
+        print(i)
+        print()
+        print(f'There were a total of {len(lose_list) + len(win_list)} trades made in the backtest')
+        print(f'The winning percentage of the algo was {len(win_list)/(len(lose_list) + len(win_list))}')
+        print(f'The average winning trade made {Average(win_list)}')
+        print(f'The average losing trade made {Average(lose_list)}')
+        print(f'The best trade made {max(win_list)}')
+        print(f'The worst trade lost {min(lose_list)}')
+            
+    
+    
+    
     def plot_act_value_history(self, df):
         
         '''Plots the value of the account vs the value of whatever thing you are trading'''
@@ -288,7 +333,7 @@ class wallet:
         fig.add_trace(go.Scatter(x = time, y = act_value, line_color = 'blue', name = 'Account Value'))
 
         #add index price
-        fig.add_trace(go.Scatter(x = df['time'], y = df['close'], line_color = 'black', name = 'Coin Price'),
+        fig.add_trace(go.Scatter(x = df['date_and_time'], y = df['close'], line_color = 'black', name = 'Coin Price'),
         secondary_y = True)
         
         #add buy signals
@@ -325,13 +370,13 @@ class wallet:
             
         actfig = go.Figure()
         
-        actfig.add_trace(go.Scatter(x = dfc.time, y = dfc.percent_change, line_color = 'black', name = 'coin returns'))
+        actfig.add_trace(go.Scatter(x = dfc.close_time, y = dfc.percent_change, line_color = 'black', name = 'coin returns'))
         actfig.add_trace(go.Scatter(x = act_value_perc_time, y = act_value_perc, line_color = 'red', name = 'algo returns'))
         
         actfig.show()
         
         print(f'the strategy returned {1-(self.account_value_history[1][0]/self.account_value_history[1][-1])}%')
-        print(f'the traded coin returned {1-(df.close.iloc[0]/df.close.iloc[-1])}%')
+        print(f'the traded coin returned {1-(dfc.close.iloc[0]/dfc.close.iloc[-1])}%')
     
     
     
@@ -447,7 +492,7 @@ class backtest:
 #
     def run_backtest_2(self, trade_logic):
         trade_logic(self.wallet, self.data,self.ticker)
-       
+
 
 class data_downloader:   
     '''
@@ -491,29 +536,32 @@ class data_downloader:
         api_secret=''
         client = Client(api_key=api_key,api_secret=api_secret)
         
-        for c in coin:
-            print(f'Gathering {c} data...')
-            data = client.get_historical_klines(symbol=f'{c}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=self.start_date,end_str=self.end_date)
-            cols = ['date_and_time','open','high','low','close','volume','CloseTime','QuoteAssetVolume','NumberOfTrades','TBBAV','TBQAV','dropme']
-            df = pd.DataFrame(data,columns=cols)
-            df.drop(['dropme'], inplace = True, axis = 1)
+        # for c in coin:
+        print(f'Gathering {coin} data...')
+        data = client.get_historical_klines(symbol=f'{coin}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=self.start_date,end_str=self.end_date)
+        cols = ['date_and_time','open','high','low','close','volume','close_time','quote_asset_volume','number_of_trades','TBBAV','TBQAV','dropme']
+        df = pd.DataFrame(data,columns=cols)
+        df.drop(['dropme'], inplace = True, axis = 1)
+        
+        # for whatever reason, most of the columns come in as strings when you download from binance. This converts to floats. You have to have time come in as an object for the for loop
+        # to work!!!
+        
+        #this is for the database
+        df['coin'] = coin
+        df['id'] = df['coin']+df['date_and_time'].astype('string')
+
+
+        for i in range(len(df)):
+            df['date_and_time'][i] = datetime.fromtimestamp(int(df['date_and_time'][i]/1000))
+
+        df['date'] = [d.date() for d in df['date_and_time']]
+        df['time'] = [d.time() for d in df['date_and_time']]           
+        
+        # for whatever reason, most of the columns come in as strings when you download from binance. This converts to floats. You have to have time come in as an object for the for loop
+        # to work!!! You need to explicitly declare the date and time as a string, otherwise you will get an error!
+        df = df.astype({'date_and_time':object,'open': float,'high':float,'low':float,'close':float,'volume':float, 'quote_asset_volume':float,'TBBAV':float,'TBQAV':float,'date':str,'time':str})
             
-            # for whatever reason, most of the columns come in as strings when you download from binance. This converts to floats. You have to have time come in as an object for the for loop
-            # to work!!!
-            df = df.astype({'date_and_time':object,'open': float,'high':float,'low':float,'close':float,'volume':float, 'QuoteAssetVolume':float,'TBBAV':float,'TBQAV':float})
-            
-            #this is for the database
-            df['coin'] = c
-            df['db_key'] = df['coin']+df['date_and_time'].astype('string')
-
-
-            for i in range(len(df)):
-                df['date_and_time'][i] = datetime.fromtimestamp(int(df['date_and_time'][i]/1000))
-
-            df['date'] = [d.date() for d in df['date_and_time']]
-            df['time'] = [d.time() for d in df['date_and_time']]           
-                       
-            return df
+        return df
 
 
 
@@ -545,7 +593,8 @@ def create_database(directory, db_name):
         "quote_asset_volume" REAL,
         "number_of_trades" INTEGER,
         "tbbav" REAL,
-        "tbqav" REAL);""")
+        "tbqav" REAL,
+        unique (id));""")
 
     con.commit()
     cur.close()
@@ -553,8 +602,35 @@ def create_database(directory, db_name):
 
     print(f'Created a sqlite database named {db_name} in {directory}')
 
-def update_database(filepath):
-    pass
+
+def update_database(filepath,data_frame):
+    '''
+    Function that stores data in the database
+    '''
+    
+    con = sqlite3.connect(filepath)
+    cur = con.cursor() 
+
+    
+    for index, row in tqdm.tqdm(data_frame.iterrows()):
+        
+        sqlite_insert_query = """INSERT OR REPLACE INTO historical_coin_data
+                            (id, coin, date, time, date_and_time,open,high,low,close,volume,close_time,quote_asset_volume,number_of_trades,tbbav,tbqav) 
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) """
+    
+        
+        data_tuple =(row.id, row.coin, row.date, row.time, row.date_and_time, row.open,row.high,row.low,row.close,row.volume,row.close_time,
+        row.quote_asset_volume, row.number_of_trades,row.TBBAV,row.TBQAV)
+        
+        
+        cur.execute(sqlite_insert_query, data_tuple)
+
+
+    con.commit()
+    cur.close()
+    con.close()  
+    print('Updated Database')
+
 
 def retrieve_data(filepath):
     pass
