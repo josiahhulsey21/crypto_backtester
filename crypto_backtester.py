@@ -4,8 +4,9 @@ import tqdm
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from binance.client import Client 
-from datetime import datetime
 import sqlite3
+from datetime import datetime, timedelta
+
 
 class wallet:
     ''' 
@@ -276,9 +277,9 @@ class wallet:
         # https://stackoverflow.com/questions/22607324/start-end-and-duration-of-maximum-drawdown-in-python
 
         ##not working!!!!
-        xs = np.array(self.account_value_history[1]).cumsum()
-        i = np.argmax(np.maximum.accumulate(xs) - xs) # end of the period
-        print(i)
+        # xs = np.array(self.account_value_history[1]).cumsum()
+        # i = np.argmax(np.maximum.accumulate(xs) - xs) # end of the period
+        # print(i)
         # j = np.argmax(xs[:i]) # start of period
         # print(xs)
 
@@ -296,7 +297,7 @@ class wallet:
                 win_list.append(trade_result)   
 
         print(f'the strategy returned {round(1-(self.account_value_history[1][0]/self.account_value_history[1][-1]),2)}%')
-        print(i)
+        # print(i)
         print()
         print(f'There were a total of {len(lose_list) + len(win_list)} trades made in the backtest')
         print(f'The winning percentage of the algo was {len(win_list)/(len(lose_list) + len(win_list))}')
@@ -333,15 +334,15 @@ class wallet:
         fig.add_trace(go.Scatter(x = time, y = act_value, line_color = 'blue', name = 'Account Value'))
 
         #add index price
-        fig.add_trace(go.Scatter(x = df['date_and_time'], y = df['close'], line_color = 'black', name = 'Coin Price'),
+        fig.add_trace(go.Scatter(x = df.index, y = df['close'], line_color = 'black', name = 'Coin Price'),
         secondary_y = True)
         
         #add buy signals
-        fig.add_trace(go.Scatter(x = buy_df['date'], y = buy_df['price'], line_color = 'green', name = 'Buy', mode="markers"),
+        fig.add_trace(go.Scatter(x = buy_df.index, y = buy_df['price'], line_color = 'green', name = 'Buy', mode="markers"),
         secondary_y = True)
  
         #add sell signals
-        fig.add_trace(go.Scatter(x = sell_df['date'], y = sell_df['price'], line_color = 'red', name = 'sell', mode="markers"),
+        fig.add_trace(go.Scatter(x = sell_df.index, y = sell_df['price'], line_color = 'red', name = 'sell', mode="markers"),
         secondary_y = True)
         
         fig.show()
@@ -529,7 +530,7 @@ class data_downloader:
     
     def get_data(self, coin):
         '''
-        Function that downloads data using the binance API. you need to pass the coin in the form  of a list.....probably should fix that
+        Function that downloads data using the binance API.
         '''
 
         api_key=''
@@ -641,6 +642,7 @@ def retrieve_data_single_coin(db_file,coin):
     lu_coin = coin.upper()
 
     df = pd.read_sql(f"SELECT * FROM historical_coin_data WHERE coin == '{lu_coin}'",con)
+    df = df.sort_values(by='date_and_time',ascending=True)
 
     cur.close()
     con.close()
@@ -686,6 +688,96 @@ def get_data_by_date(db_file,start_date,end_date):
 
     return df
    
+
+
+def download_data_for_automated_updating(coin, start_date, end_date):
+    '''
+    Function that downloads data using the binance API.
+    '''
+
+    api_key=''
+    api_secret=''
+    client = Client(api_key=api_key,api_secret=api_secret)
+    
+    # for c in coin:
+    print(f'Gathering {coin} data...')
+    data = client.get_historical_klines(symbol=f'{coin}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=start_date,end_str=end_date)
+    cols = ['date_and_time','open','high','low','close','volume','close_time','quote_asset_volume','number_of_trades','TBBAV','TBQAV','dropme']
+    df = pd.DataFrame(data,columns=cols)
+    df.drop(['dropme'], inplace = True, axis = 1)
+    
+    # for whatever reason, most of the columns come in as strings when you download from binance. This converts to floats. You have to have time come in as an object for the for loop
+    # to work!!!
+    
+    #this is for the database
+    df['coin'] = coin
+    df['id'] = df['coin']+df['date_and_time'].astype('string')
+
+
+    for i in range(len(df)):
+        df['date_and_time'][i] = datetime.fromtimestamp(int(df['date_and_time'][i]/1000))
+
+    df['date'] = [d.date() for d in df['date_and_time']]
+    df['time'] = [d.time() for d in df['date_and_time']]           
+    
+    # for whatever reason, most of the columns come in as strings when you download from binance. This converts to floats. You have to have time come in as an object for the for loop
+    # to work!!! You need to explicitly declare the date and time as a string, otherwise you will get an error!
+    df = df.astype({'date_and_time':object,'open': float,'high':float,'low':float,'close':float,'volume':float, 'quote_asset_volume':float,'TBBAV':float,'TBQAV':float,'date':str,'time':str})
+        
+    return df
+
+
+
+
+
+def update_all_coins(db_file):
+    '''
+    Function that will update data for all coins in the database to the current day
+    '''
+    now = datetime.now()
+    now = now.strftime("%Y/%m/%d")
+    
+    #put this before you open the database otherwise you might get weird results since this will also open and close the db
+    coins_in_db = check_unique_db(db_file)
+    
+    con = sqlite3.connect(db_file)
+    cur = con.cursor()
+
+    for coin in coins_in_db:
+        #query that selects the most recent date
+        query = f"SELECT date FROM historical_coin_data WHERE coin == '{coin}' ORDER BY date DESC LIMIT 1";
+        #execute query
+        cur=con.execute(query)
+
+        #returns the latest date for the coin
+        sql_date = cur.fetchone()
+
+        #returns the actual date from sqlite
+        sql_date = sql_date[0]
+
+        #convert it to a date time object
+        formater = "%Y-%m-%d"
+        sql_date = datetime.strptime(sql_date, formater)
+
+        #subtract 1 day from the most recent date
+        max_date_minus_1 = sql_date.date()
+        max_date_minus_1 = max_date_minus_1 - timedelta(days=1)
+        max_date_minus_1 = max_date_minus_1.strftime("%Y-%m-%d")
+
+        df = download_data_for_automated_updating(coin,max_date_minus_1,now)
+
+        update_database(db_file,df)
+
+        print(f'updated {coin} in database')
+
+    con.commit()
+    cur.close()
+    con.close()
+
+
+
+
+
 
 
 
