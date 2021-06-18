@@ -334,15 +334,15 @@ class wallet:
         fig.add_trace(go.Scatter(x = time, y = act_value, line_color = 'blue', name = 'Account Value'))
 
         #add index price
-        fig.add_trace(go.Scatter(x = df.index, y = df['close'], line_color = 'black', name = 'Coin Price'),
+        fig.add_trace(go.Scatter(x = df.date_and_time, y = df['close'], line_color = 'black', name = 'Coin Price'),
         secondary_y = True)
         
         #add buy signals
-        fig.add_trace(go.Scatter(x = buy_df.index, y = buy_df['price'], line_color = 'green', name = 'Buy', mode="markers"),
+        fig.add_trace(go.Scatter(x = buy_df.date , y = buy_df['price'], line_color = 'green', name = 'Buy', mode="markers"),
         secondary_y = True)
  
         #add sell signals
-        fig.add_trace(go.Scatter(x = sell_df.index, y = sell_df['price'], line_color = 'red', name = 'sell', mode="markers"),
+        fig.add_trace(go.Scatter(x = sell_df.date, y = sell_df['price'], line_color = 'red', name = 'sell', mode="markers"),
         secondary_y = True)
         
         fig.show()
@@ -371,7 +371,7 @@ class wallet:
             
         actfig = go.Figure()
         
-        actfig.add_trace(go.Scatter(x = dfc.close_time, y = dfc.percent_change, line_color = 'black', name = 'coin returns'))
+        actfig.add_trace(go.Scatter(x = dfc.date, y = dfc.percent_change, line_color = 'black', name = 'coin returns'))
         actfig.add_trace(go.Scatter(x = act_value_perc_time, y = act_value_perc, line_color = 'red', name = 'algo returns'))
         
         actfig.show()
@@ -631,23 +631,40 @@ def update_database(filepath,data_frame):
     print('Updated Database')
 
 
-def retrieve_data_single_coin(db_file,coin):
+def retrieve_data_single_coin(db_file,coin, all_data = True, start_date = '2021-04-13', end_date = '2021-04-15'):
     '''
-    Function that returns all data for a given coin in your database
+    Function that returns data for a given coin in your database
+    If all data argument is set to true, the function returns all the data your database has for that coin
+    If it is set to false, you need to provide a start and end date in this format (y-m-d) ex: '2021-04-13'
     '''
 
-    con = sqlite3.connect(db_file)
-    cur = con.cursor() 
+    #if you dont want all the data, set all_data to false and then feed a start and end date
+    if all_data == False: 
+        con = sqlite3.connect(db_file)
+        cur = con.cursor() 
+        lu_coin = coin.upper()
+        df = pd.read_sql(f"SELECT * FROM historical_coin_data WHERE date between date('{start_date}') AND date('{end_date}') AND coin == '{lu_coin}'",con)
+        df = df.sort_values(by='date_and_time',ascending=True)
 
-    lu_coin = coin.upper()
+        cur.close()
+        con.close()
 
-    df = pd.read_sql(f"SELECT * FROM historical_coin_data WHERE coin == '{lu_coin}'",con)
-    df = df.sort_values(by='date_and_time',ascending=True)
+        return df
 
-    cur.close()
-    con.close()
+    else:
 
-    return df
+        con = sqlite3.connect(db_file)
+        cur = con.cursor() 
+
+        lu_coin = coin.upper()
+
+        df = pd.read_sql(f"SELECT * FROM historical_coin_data WHERE coin == '{lu_coin}'",con)
+        df = df.sort_values(by='date_and_time',ascending=True)
+
+        cur.close()
+        con.close()
+
+        return df
 
 
 def check_unique_db(db_file):
@@ -682,7 +699,7 @@ def get_data_by_date(db_file,start_date,end_date):
     cur = con.cursor() 
     
     df = pd.read_sql(f"SELECT * FROM historical_coin_data WHERE date between date('{start_date}') AND date('{end_date}')",con)
-
+    df = df.sort_values(by='date_and_time',ascending=True)
     cur.close()
     con.close()
 
@@ -768,7 +785,7 @@ def update_all_coins(db_file):
 
         update_database(db_file,df)
 
-        print(f'updated {coin} in database')
+
 
     con.commit()
     cur.close()
