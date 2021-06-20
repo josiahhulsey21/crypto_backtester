@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from binance.client import Client 
 import sqlite3
 from datetime import datetime, timedelta
+from concurrent.futures import ProcessPoolExecutor
 
 
 class wallet:
@@ -157,7 +158,7 @@ class wallet:
 
 
 
-    def check_stop_loss(self, current_price, time):
+    def check_stop_loss(self, current_price, time,verbose = False):
         '''
         Function that checks to see if a stop loss has been crossed and sells if it has
         need to have the trading algo pass the current price and current time
@@ -175,11 +176,13 @@ class wallet:
                 self.sell_holding(trade_id, current_price, time)
                 #initiate cooldown
                 self.initiate_cooldown()
-                print('Stop Loss Triggered')
+                
+                if verbose == True:
+                    print('Stop Loss Triggered')
 
 
 
-    def check_take_profit(self, current_price, time):
+    def check_take_profit(self, current_price, time, verbose = False):
         '''
         Function that checks to see if a take profit event has been crossed and sells if it has
         need to have the trading algo pass the current price and current time
@@ -194,11 +197,13 @@ class wallet:
                 self.sell_holding(trade_id, current_price, time)
                 #initiate cooldown
                 self.initiate_cooldown()
-                print('Take Profits Triggered')
+
+                if verbose == True:
+                    print('Take Profits Triggered')
 
 
 
-    def dynamic_stop_loss(self, current_price, floor_shift = .01):
+    def dynamic_stop_loss(self, current_price, floor_shift = .01, verbose = False):
         
         '''
         Function that updates the stop loss to protect profits. It will dynamically change the stop loss once the price gets above your take profits threshold.
@@ -210,7 +215,6 @@ class wallet:
         
         if self.act_holdings:
 
-            trade_id = self.get_trade_id_simple()
 
             if current_price >= self.act_holdings[0]['take_profit']:
                 
@@ -218,9 +222,10 @@ class wallet:
                 new_tp = current_price + (current_price * floor_shift)
                 
                 self.act_holdings[0]['stop_loss'] = new_sl
-                self.act_holdings[0]['take_profit'] = new_sl
-
-                # print('Updated Stop Loss to protect profits')
+                self.act_holdings[0]['take_profit'] = new_tp
+                
+                if verbose == True:
+                    print('Updated Stop Loss to protect profits')
 
 
 
@@ -270,18 +275,10 @@ class wallet:
         def Average(lst):
             return sum(lst) / len(lst)
 
-        #this calls the print journal function......probably not good to have it print out every time. Can fix this
         working_df = self.print_journal()
 
-
+        #idea on how to get drawdown in here. havent been able to make it work yet
         # https://stackoverflow.com/questions/22607324/start-end-and-duration-of-maximum-drawdown-in-python
-
-        ##not working!!!!
-        # xs = np.array(self.account_value_history[1]).cumsum()
-        # i = np.argmax(np.maximum.accumulate(xs) - xs) # end of the period
-        # print(i)
-        # j = np.argmax(xs[:i]) # start of period
-        # print(xs)
 
         for pair in working_df.trade_id.unique():
             dfc = working_df.copy()
@@ -296,8 +293,7 @@ class wallet:
             elif trade_result > 0:
                 win_list.append(trade_result)   
 
-        print(f'the strategy returned {round(1-(self.account_value_history[1][0]/self.account_value_history[1][-1]),2)}%')
-        # print(i)
+        print(f'the strategy returned {((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100}%')
         print()
         print(f'There were a total of {len(lose_list) + len(win_list)} trades made in the backtest')
         print(f'The winning percentage of the algo was {len(win_list)/(len(lose_list) + len(win_list))}')
@@ -346,11 +342,13 @@ class wallet:
         secondary_y = True)
         
         fig.show()
-        
-        print(f'the strategy returned {round(1-(self.account_value_history[1][0]/self.account_value_history[1][-1]),2)}%')
-        print(f'the traded coin returned {round(1-(df.close.iloc[0]/df.close.iloc[-1]),2)}%')
 
-        
+
+        print(f'the strategy returned {((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100}%')
+        print(f'the traded coin returned {((df.close.iloc[-1] - df.close.iloc[0])/df.close.iloc[0])*100}%')
+
+
+  
         
     def plot_act_value_history_percentage(self, df):
         
@@ -790,6 +788,63 @@ def update_all_coins(db_file):
     con.commit()
     cur.close()
     con.close()
+
+
+
+
+class optimizer_ta:
+
+    '''
+    Class that is meant to take in a range of parameters for a TA indicator to find the best resuts. hope to be able to parallelize this in the future.
+    '''
+
+    def __init__(self,df,trading_func,params):
+
+        self.data = df
+        self.trading_func = trading_func
+        self.params = params
+
+        #returns,win_rate, lose_rate, average_win, average_loss, max_win,max_loss
+        self.optimizer_journal = [[],[],[],[],[],[],[]]
+
+
+    def run_optimizer(self):
+        '''
+        This will test all the combinations that you have provided in the parameters list. It is syncronous so it could take awhile if you are testing lots of different combinations
+        '''
+        # have it print out the coin returns here so that you can compare
+        print(f'the traded coin returned {((self.data.close.iloc[-1] - self.data.close.iloc[0])/self.data.close.iloc[0])*100}%')
+        
+
+
+        #loop that will iterate over each parameter iteration
+        for p in self.params:
+            self.trading_func(self.data,p)
+
+
+
+
+
+
+
+    def run_parallel(trade_logic,workers = 6):
+        #not working!!!!!!!
+
+        if __name__ == '__main__':
+
+            with concurrent.futures.ProcessPoolExecutor(max_workers = workers) as executor:
+                executor.map(self.trading_func, self.params)
+
+            
+   
+
+
+
+
+
+
+
+
 
 
 
