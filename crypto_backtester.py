@@ -36,14 +36,14 @@ class wallet:
         self.act_holdings = []
         
         #this will be for journaling the moves
-        self.journal =[[],[],[],[],[],[],[],[],[],[]]     
+        self.journal =[[],[],[],[],[],[],[],[],[],[],[]]     
 
         #this variable is used in the functions that will force the algo to take a break should you tell it to.
         self.cooldown = 0
         
     
     
-    def add_holding(self, ticker, price, time, stop_loss = .05, take_profit = .05):
+    def add_holding(self, ticker, price, time, stop_loss = .05, take_profit = .05,jm = "Bought Coin"):
         '''
         This is the main function that will add holdings to the wallet.
         * ticker, price, time are all required arguments
@@ -83,10 +83,10 @@ class wallet:
         self.journal[7].append(stop_loss_price)
         self.journal[8].append(take_profit_price)
         self.journal[9].append(cooldown)
-        
+        self.journal[10].append(jm)
         
     
-    def sell_holding(self,trade_id, price, time):
+    def sell_holding(self,trade_id, price, time, jm = "Sold coin"):
 
         '''
         This is the primary function that is used to sell coins. 
@@ -127,7 +127,7 @@ class wallet:
         self.journal[7].append(0)
         self.journal[8].append(0)
         self.journal[9].append(0)
-        
+        self.journal[10].append(jm)        
 
 
     def initiate_cooldown(self, cd_period = 1000):
@@ -158,7 +158,7 @@ class wallet:
 
 
 
-    def check_stop_loss(self, current_price, time,verbose = False):
+    def check_stop_loss(self, current_price, time,jm="Stop Loss Triggered",verbose = False):
         '''
         Function that checks to see if a stop loss has been crossed and sells if it has
         need to have the trading algo pass the current price and current time
@@ -173,7 +173,7 @@ class wallet:
 
             if current_price <= self.act_holdings[0]['stop_loss']:
                 #call your function that sells the holding. Price and time need to be passed in the algo function
-                self.sell_holding(trade_id, current_price, time)
+                self.sell_holding(trade_id, current_price, time,jm=jm)
                 #initiate cooldown
                 self.initiate_cooldown()
                 
@@ -237,7 +237,8 @@ class wallet:
                            'ticker':self.journal[2], 'price':self.journal[3],
                           'ammount':self.journal[4],'total_price': self.journal[5],
                           'trade_id':self.journal[6], 'stop_loss_price':self.journal[7],
-                          'take_profit_price':self.journal[8], 'cooldown':self.journal[9]})
+                          'take_profit_price':self.journal[8], 'cooldown':self.journal[9],
+                          'reason':self.journal[10]})
         return df
         print(df)
         
@@ -268,9 +269,12 @@ class wallet:
             self.account_value_history[1].append(self.account_value)       
         
 
-    def print_statistics(self):
+    def print_statistics(self,coin_df):
         lose_list = []
         win_list = []
+        gains_list = []
+        losses_list = []
+
 
         def Average(lst):
             return sum(lst) / len(lst)
@@ -286,21 +290,39 @@ class wallet:
             
             buy_price = dfc[dfc['action'] == 'buy'].total_price.max()
             sell_price = dfc[dfc['action'] == 'sell'].total_price.max()
+
+
+            percentage_returned = ((sell_price-buy_price)/buy_price)*100
+            if percentage_returned < 0:
+                losses_list.append(percentage_returned)
             
+            else:
+                gains_list.append(percentage_returned)
+
+    
             trade_result = sell_price - buy_price
             if trade_result < 0:
                 lose_list.append(trade_result)
             elif trade_result > 0:
                 win_list.append(trade_result)   
 
-        print(f'the strategy returned {((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100}%')
+        print(f'the strategy returned {round((((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100),2)}%')
+        print(f'the traded coin returned {round((((coin_df.close.iloc[-1] - coin_df.close.iloc[0])/coin_df.close.iloc[0])*100),2)}%')
         print()
         print(f'There were a total of {len(lose_list) + len(win_list)} trades made in the backtest')
-        print(f'The winning percentage of the algo was {len(win_list)/(len(lose_list) + len(win_list))}')
-        print(f'The average winning trade made {Average(win_list)}')
-        print(f'The average losing trade made {Average(lose_list)}')
-        print(f'The best trade made {max(win_list)}')
-        print(f'The worst trade lost {min(lose_list)}')
+        print()       
+        print('-----------------Algo Performance by Percentages----------------')
+        print(f'The winning percentage of the algo was {round(len(win_list)/(len(lose_list) + len(win_list)),2)*100}%')
+        print(f'The average winning trade returned {round(Average(gains_list),2)}%')
+        print(f'The average losing trade returned {round(Average(losses_list),2)}%')
+        print(f'The best trade returned {round(max(gains_list),2)}%')
+        print(f'The worst trade returned {round(min(losses_list),2)}%')
+        print()
+        print('-----------------Algo Performance by Dollar Ammounts----------------')
+        print(f'The average winning trade made {round(Average(win_list),2)}')
+        print(f'The average losing trade made {round(Average(lose_list),2)}')
+        print(f'The best trade made {round(max(win_list),2)}')
+        print(f'The worst trade lost {round(min(lose_list),2)}')
             
     
     
@@ -374,8 +396,9 @@ class wallet:
         
         actfig.show()
         
-        print(f'the strategy returned {1-(self.account_value_history[1][0]/self.account_value_history[1][-1])}%')
-        print(f'the traded coin returned {1-(dfc.close.iloc[0]/dfc.close.iloc[-1])}%')
+        print(f'the strategy returned {((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100}%')
+        print(f'the traded coin returned {((df.close.iloc[-1] - df.close.iloc[0])/df.close.iloc[0])*100}%')
+
     
     
     
@@ -418,78 +441,7 @@ class backtest:
         self.total_epochs = len(self.data)  
     
     
-    def run_backtest(self):
-        ''' may need to clear the journals and account before running this???'''
-        
-        for index, row in tqdm.tqdm(self.data.iterrows()):
-            
-            #get the current price in case you need to pass it to a buy or sell function
-            price = row["close"]
-            time = row["time"]
-            #get the current sma value
-            sma_value = row["1000_sma"]
-            
-            roc_value = row["roc_1000"]
-#             print(roc_value)
-
-            sma_check = price - sma_value
-
-            #check to see if you are in cool down mode or if you have encountered stop loss or take profits. Probably should move the cooldown check into a function
-            
-            #maybe have this return a number and use that as the if statement?
-            # self.wallet.check_cooldown()
-            self.wallet.dynamic_stop_loss(price)
-            self.wallet.check_stop_loss(price,time)
-            # self.wallet.check_take_profit(price,time)
-            if self.wallet.cooldown > 0:
-                self.wallet.update_cooldown()
-                # print('updating cooldown value')
-
-
-            #If you pass the above criteria, implement the trade logic you want
-            else:
-                #check to see if the current price is above the sma and if you currently hold any btc
-                if not self.wallet.act_holdings and sma_check > 0 and roc_value > 105.0:
-                    self.wallet.add_holding(self.ticker, price, time)
-                    self.wallet.update_act_value_simple(price,time)
-                    print('creating position')
-                    
-                elif self.wallet.act_holdings and sma_check > 0:
-                    self.wallet.update_act_value_simple(price,time)
-                    # print('position already held, moving to next epoch')
-
-                elif self.wallet.act_holdings and sma_check < 0:
-                    #get the trade id on this step....maybe write this as a stand alone function in the wallet class
-                    trade_id = self.wallet.get_trade_id_simple()
-                    self.wallet.sell_holding(trade_id, price,time)
-                    self.wallet.update_act_value_simple(price,time)
-                    
-                    
-                    #testing cooldown feature. having the algo wait 1000 minutes before it re-enters the market after it sells a position
-                    self.wallet.initiate_cooldown()
-
-                    print('market turning, selling position. Initiated Cooldown')
-
-                elif self.wallet.act_holdings and roc_value < 102:
-                    #get the trade id on this step....maybe write this as a stand alone function in the wallet class
-                    trade_id = self.wallet.get_trade_id_simple()
-                    self.wallet.sell_holding(trade_id, price,time)                
-                    self.wallet.update_act_value_simple(price,time)
-                    
-                    #testing cooldown feature. having the algo wait 1000 minutes before it re-enters the market after it sells a position
-                    self.wallet.initiate_cooldown()
-                    
-                    print('Rally finished, selling position. Initiated Cooldown.') 
-    
-                elif not self.wallet.act_holdings and sma_check < 0:     
-                    self.wallet.update_act_value_simple(price,time)
-                    # print('bear market, moving to next epoch')        
-                
-                # when non of the buy or sell requirments are met, follow the usual update account value protocol
-                else:
-                    self.wallet.update_act_value_simple(price,time)
-#
-    def run_backtest_2(self, trade_logic):
+    def run_backtest(self, trade_logic):
         trade_logic(self.wallet, self.data,self.ticker)
 
 
@@ -820,33 +772,6 @@ class optimizer_ta:
         #loop that will iterate over each parameter iteration
         for p in self.params:
             self.trading_func(self.data,p)
-
-
-
-
-
-
-
-    def run_parallel(trade_logic,workers = 6):
-        #not working!!!!!!!
-
-        if __name__ == '__main__':
-
-            with concurrent.futures.ProcessPoolExecutor(max_workers = workers) as executor:
-                executor.map(self.trading_func, self.params)
-
-            
-   
-
-
-
-
-
-
-
-
-
-
 
 
 
