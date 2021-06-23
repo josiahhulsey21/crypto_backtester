@@ -281,6 +281,9 @@ class wallet:
 
         working_df = self.print_journal()
 
+        total_coins_traded = working_df.ammount.sum()
+        total_money_moved = working_df.total_price.sum()
+
         #idea on how to get drawdown in here. havent been able to make it work yet
         # https://stackoverflow.com/questions/22607324/start-end-and-duration-of-maximum-drawdown-in-python
 
@@ -306,10 +309,10 @@ class wallet:
             elif trade_result > 0:
                 win_list.append(trade_result)   
 
-        print(f'the strategy returned {round((((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100),2)}%')
-        print(f'the traded coin returned {round((((coin_df.close.iloc[-1] - coin_df.close.iloc[0])/coin_df.close.iloc[0])*100),2)}%')
+        print(f'The strategy returned {round((((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100),2)}%')
+        print(f'The traded coin returned {round((((coin_df.close.iloc[-1] - coin_df.close.iloc[0])/coin_df.close.iloc[0])*100),2)}%')
+        print(f'The strategy returned ${round(self.account_value_history[1][-1]-self.account_value_history[1][0],2)} with a starting balance of {self.account_value_history[1][0]}')
         print()
-        print(f'There were a total of {len(lose_list) + len(win_list)} trades made in the backtest')
         print()       
         print('-----------------Algo Performance by Percentages----------------')
         print(f'The winning percentage of the algo was {round(len(win_list)/(len(lose_list) + len(win_list)),2)*100}%')
@@ -323,7 +326,12 @@ class wallet:
         print(f'The average losing trade made {round(Average(lose_list),2)}')
         print(f'The best trade made {round(max(win_list),2)}')
         print(f'The worst trade lost {round(min(lose_list),2)}')
-            
+        print()
+        print('-----------------Algo Trading Statistics for Fees----------------')  
+        print(f'There were a total of {len(lose_list) + len(win_list)} trades made in the backtest')
+        print(f'The strategy traded ${round(total_money_moved,2)} during the backtest')         
+        print(f'The strategy a total of {round(total_coins_traded,2)} coins during the backtest')         
+               
     
     
     
@@ -373,6 +381,10 @@ class wallet:
   
         
     def plot_act_value_history_percentage(self, df):
+        '''
+        This doesnt quite work. It messes up the account returns and for whatever reason takes them permanently into a percentage. You also might not even be calculating the 
+        account returns properly????
+        '''
         
         dfc = df.copy()
     
@@ -391,13 +403,13 @@ class wallet:
             
         actfig = go.Figure()
         
-        actfig.add_trace(go.Scatter(x = dfc.date, y = dfc.percent_change, line_color = 'black', name = 'coin returns'))
+        actfig.add_trace(go.Scatter(x = dfc.date_and_time, y = dfc.percent_change, line_color = 'black', name = 'coin returns'))
         actfig.add_trace(go.Scatter(x = act_value_perc_time, y = act_value_perc, line_color = 'red', name = 'algo returns'))
         
         actfig.show()
         
-        print(f'the strategy returned {((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100}%')
-        print(f'the traded coin returned {((df.close.iloc[-1] - df.close.iloc[0])/df.close.iloc[0])*100}%')
+        # print(f'the strategy returned {((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100}%')
+        # print(f'the traded coin returned {((df.close.iloc[-1] - df.close.iloc[0])/df.close.iloc[0])*100}%')
 
     
     
