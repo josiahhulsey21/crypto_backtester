@@ -275,6 +275,10 @@ class wallet:
         gains_list = []
         losses_list = []
 
+        average_hold_time_list = []
+        winning_hold_time_list = []
+        losing_hold_time_list = []
+
 
         def Average(lst):
             return sum(lst) / len(lst)
@@ -287,6 +291,7 @@ class wallet:
         #idea on how to get drawdown in here. havent been able to make it work yet
         # https://stackoverflow.com/questions/22607324/start-end-and-duration-of-maximum-drawdown-in-python
 
+        #iterate over each trade id in the journal
         for pair in working_df.trade_id.unique():
             dfc = working_df.copy()
             dfc = dfc[dfc['trade_id'] == pair]
@@ -294,13 +299,24 @@ class wallet:
             buy_price = dfc[dfc['action'] == 'buy'].total_price.max()
             sell_price = dfc[dfc['action'] == 'sell'].total_price.max()
 
+            # for calculating the holding times
+            formater = "%Y-%m-%d %H:%M:%S"
+            buy_date = datetime.strptime(dfc.date.min(), formater)
+            sell_date = datetime.strptime(dfc.date.max(), formater)
+            hold_time = sell_date - buy_date
+            hold_time = hold_time.total_seconds()/60
+            average_hold_time_list.append(hold_time)
+
 
             percentage_returned = ((sell_price-buy_price)/buy_price)*100
             if percentage_returned < 0:
                 losses_list.append(percentage_returned)
+                losing_hold_time_list.append(hold_time)
+                
             
             else:
                 gains_list.append(percentage_returned)
+                winning_hold_time_list.append(hold_time)
 
     
             trade_result = sell_price - buy_price
@@ -311,7 +327,7 @@ class wallet:
 
         print(f'The strategy returned {round((((self.account_value_history[1][-1]-self.account_value_history[1][0])/self.account_value_history[1][0]) * 100),2)}%')
         print(f'The traded coin returned {round((((coin_df.close.iloc[-1] - coin_df.close.iloc[0])/coin_df.close.iloc[0])*100),2)}%')
-        print(f'The strategy returned ${round(self.account_value_history[1][-1]-self.account_value_history[1][0],2)} with a starting balance of {self.account_value_history[1][0]}')
+        print(f'The strategy returned ${round(self.account_value_history[1][-1]-self.account_value_history[1][0],2)} with a starting balance of ${self.account_value_history[1][0]}')
         print()
         print()       
         print('-----------------Algo Performance by Percentages----------------')
@@ -327,6 +343,11 @@ class wallet:
         print(f'The best trade made {round(max(win_list),2)}')
         print(f'The worst trade lost {round(min(lose_list),2)}')
         print()
+        print('-----------------Algo Hold Time Statistics----------------')  
+        print(f'The average hold time for a position was {round(Average(average_hold_time_list),2)} minutes')
+        print(f'The average hold time for a winning position was {round(Average(winning_hold_time_list),2)} minutes')
+        print(f'The average hold time for a losing position was {round(Average(losing_hold_time_list),2)} minutes')  
+        print() 
         print('-----------------Algo Trading Statistics for Fees----------------')  
         print(f'There were a total of {len(lose_list) + len(win_list)} trades made in the backtest')
         print(f'The strategy traded ${round(total_money_moved,2)} during the backtest')         
