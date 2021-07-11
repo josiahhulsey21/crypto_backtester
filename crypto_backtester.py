@@ -389,7 +389,7 @@ class wallet:
         secondary_y = True)
  
         #add sell signals
-        fig.add_trace(go.Scatter(x = sell_df.date, y = sell_df['price'], line_color = 'red', name = 'sell', mode="markers"),
+        fig.add_trace(go.Scatter(x = sell_df.date, y = sell_df['price'], line_color = 'red', name = 'Sell', mode="markers"),
         secondary_y = True)
         
         fig.show()
