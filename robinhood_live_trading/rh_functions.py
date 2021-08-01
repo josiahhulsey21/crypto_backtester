@@ -32,21 +32,6 @@ def get_ammount_owned():
     return float(positions[0]['quantity_available'])
 
 
-#calculate the stop loss
-def calculate_stop_loss(stop_loss = .05):
-    positions = rs.get_crypto_positions()
-    order_total_invested = float(order_details[0]['direct_cost_basis'])
-    order_quantity = float(order_details[0]['direct_quantity'])
-    
-    price_purchased = order_total_invested/order_quantity
-    
-    stop_loss_price = price_purchased - (price_purchased * stop_loss)
-    
-#     print(price_purchased)
-#     print(stop_loss_price)
-    
-    return stop_loss_price
-
 #calculate the take profit
 def calculate_take_profit(take_profit = .05):
     positions = rs.get_crypto_positions()
@@ -63,33 +48,77 @@ def calculate_take_profit(take_profit = .05):
     return take_profit_price
     
 #function that places a sell order with the limit being the current price
-def sell_coin(coin):
+def sell_coin(price, coin="BTC"):
     a_owned = get_ammount_owned()
-    price = get_price(coin)
+#     price = get_price(coin)
     rs.orders.order_sell_crypto_limit(coin,a_owned,price)    
 
 #function that will invest all your available cash into a coin
-def buy_coin(coin):
+def buy_coin(price,coin="BTC"):
     cash = get_cash_balance()
-    price = get_price(coin)
+#     price = get_price(coin)
     rs.orders.order_buy_crypto_limit_by_price(coin,cash,price)   
     
     
-    
 #submits a market order to buy 
-def buy_coin_m(coin):
+def buy_coin_m(coin = "BTC"):
     cash = get_cash_balance()
     rs.orders.order_buy_crypto_by_price(coin,cash)   
 #submits a market order to sell all your holdings
-def sell_coin_m(coin):
+def sell_coin_m(coin = "BTC"):
     a_owned = get_ammount_owned()
     price = get_price(coin)
-    rs.orders.order_sell_crypto_by_quantity(coin,a_owned)        
-    
-    
-
-    
+    rs.orders.order_sell_crypto_by_quantity(coin,a_owned)      
 
     
     
+def check_order_time_elapsed(elapsed_threshold = -5):
+    '''
+    Checks to see if you have any open orders and cancels them if they have taken longer than elapsed_threshold minutes
+    to fill
+    '''
+    
+    #check if you have any open orders
+    if rs.get_all_open_crypto_orders():
+    
+        now = datetime.now() 
+        orders = rs.get_all_open_crypto_orders()
+        string_date = orders[0]['created_at']
+        string_date = string_date[:-6]
+        string_date = string_date.replace("T",' ')
+        formatter = '%Y-%m-%d %H:%M:%S.%f'
+        order_time = datetime.strptime(string_date, formatter)
+
+        time_elapsed = order_time - now
+
+        time_elapsed = ((time_elapsed.total_seconds())/60) -60
+
+        if time_elapsed < elapsed_threshold:
+            rs.orders.cancel_all_crypto_orders()
+            print('cancelled order')
+            logging.info(f'Order cancelled because {elapsed_threshold} minutes had passed since order entry')
+
+    
+def check_stop_loss(current_price, stop_loss = .05):
+    
+    #get your position
+    positions = rs.get_crypto_positions()
+    
+    #if you have a position, check the stop loss
+    if float(positions[0]['quantity_available']) != 0.0:
+   
+        order_total_invested = float(positions[0]['direct_cost_basis'])
+        order_quantity = float(positions[0]['direct_quantity'])
+
+        price_purchased = order_total_invested/order_quantity
+
+        stop_loss_price = price_purchased - (price_purchased * stop_loss)
+#         if the stoploss has been triggered, sell the coin
+        if stop_loss_price > current_price:
+            sell_coin_m()
+            logging.info(f'Stop loss triggered. Selling position at market price')
+
+
+
+        
     

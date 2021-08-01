@@ -461,8 +461,6 @@ class backtest:
     Currently a strategy is hardcoded in to here. I would like to make this take a function as an argument and then use that function throughout the backtesting logic.
 
     '''
-
-
     
     def __init__(self, data, wallet,ticker):
         
@@ -511,18 +509,26 @@ class data_downloader:
         return coin_list
 
     
-    def get_data(self, coin):
+    def get_data(self, coin, table):
         '''
         Function that downloads data using the binance API.
+        Pass minute or daily for table arguments
         '''
 
         api_key=''
         api_secret=''
         client = Client(api_key=api_key,api_secret=api_secret)
-        
+
         # for c in coin:
         print(f'Gathering {coin} data...')
-        data = client.get_historical_klines(symbol=f'{coin}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=self.start_date,end_str=self.end_date)
+        
+        
+        if table == "minute":
+            data = client.get_historical_klines(symbol=f'{coin}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=self.start_date,end_str=self.end_date)
+        
+        if table == "daily":
+            data = client.get_historical_klines(symbol=f'{coin}USDT',interval=Client.KLINE_INTERVAL_1DAY,start_str=self.start_date,end_str=self.end_date)        
+        
         cols = ['date_and_time','open','high','low','close','volume','close_time','quote_asset_volume','number_of_trades','TBBAV','TBQAV','dropme']
         df = pd.DataFrame(data,columns=cols)
         df.drop(['dropme'], inplace = True, axis = 1)
@@ -561,7 +567,8 @@ def create_database(directory, db_name):
     full_db = f'{directory}\{db_name}.db'
     con = sqlite3.connect(full_db)
     cur = con.cursor()
-
+    
+    #Insert a table for minuite data....probably need to rename this down the road as this no longer makes sense
     cur.execute(""" CREATE TABLE IF NOT EXISTS historical_coin_data(
         "id" TEXT PRIMARY KEY,
         "coin" TEXT,
@@ -580,6 +587,27 @@ def create_database(directory, db_name):
         "tbqav" REAL,
         unique (id));""")
 
+    #Insert a table for daily data
+    cur.execute(""" CREATE TABLE IF NOT EXISTS daily_historical_coin_data(
+        "id" TEXT PRIMARY KEY,
+        "coin" TEXT,
+        "date" TEXT,
+        "time" TEXT,
+        "date_and_time" TEXT,
+        "open" REAL,
+        "high" REAL,
+        "low" REAL,
+        "close" REAL,
+        "volume" REAL,
+        "close_time" TEXT,
+        "quote_asset_volume" REAL,
+        "number_of_trades" INTEGER,
+        "tbbav" REAL,
+        "tbqav" REAL,
+        unique (id));""")
+
+
+
     con.commit()
     cur.close()
     con.close()
@@ -587,17 +615,23 @@ def create_database(directory, db_name):
     print(f'Created a sqlite database named {db_name} in {directory}')
 
 
-def update_database(filepath,data_frame):
+def update_database(filepath,data_frame,table):
     '''
     Function that stores data in the database
     '''
+
+
+    if table == "daily":
+        table = "daily_historical_coin_data"
+    elif table == "minute":
+        table = "historical_coin_data"
     
     con = sqlite3.connect(filepath)
     cur = con.cursor() 
     
     for index, row in tqdm.tqdm(data_frame.iterrows()):
         
-        sqlite_insert_query = """INSERT OR REPLACE INTO historical_coin_data
+        sqlite_insert_query = f"""INSERT OR REPLACE INTO {table}
                             (id, coin, date, time, date_and_time,open,high,low,close,volume,close_time,quote_asset_volume,number_of_trades,tbbav,tbqav) 
                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) """
     
@@ -650,7 +684,7 @@ def retrieve_data_single_coin(db_file,coin, all_data = True, start_date = '2021-
         return df
 
 
-def check_unique_db(db_file):
+def check_unique_db(db_file,table):
     '''
     Function that will return all the coins that you have stored in your database
     '''
@@ -658,7 +692,7 @@ def check_unique_db(db_file):
     unique_list = []
 
     #sql query that selects all of the unique values from the coin column
-    query = "SELECT DISTINCT(coin) FROM historical_coin_data"
+    query = f"SELECT DISTINCT(coin) FROM {table}"
 
     con = sqlite3.connect(db_file)
     cur = con.cursor() 
@@ -690,7 +724,7 @@ def get_data_by_date(db_file,start_date,end_date):
    
 
 
-def download_data_for_automated_updating(coin, start_date, end_date):
+def download_data_for_automated_updating(coin, start_date, end_date,table):
     '''
     Function that downloads data using the binance API.
     '''
@@ -699,9 +733,30 @@ def download_data_for_automated_updating(coin, start_date, end_date):
     api_secret=''
     client = Client(api_key=api_key,api_secret=api_secret)
     
+
     # for c in coin:
     print(f'Gathering {coin} data...')
-    data = client.get_historical_klines(symbol=f'{coin}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=start_date,end_str=end_date)
+
+    if table == "daily":
+        table = "daily_historical_coin_data"
+    elif table == "minute":
+        table = "historical_coin_data"
+    elif table == "daily_historical_coin_data":
+        table = 'daily'
+    elif table == "historical_coin_data":
+        table = 'minute'
+
+
+    if table == "minute":
+        data = client.get_historical_klines(symbol=f'{coin}USDT',interval=Client.KLINE_INTERVAL_1MINUTE,start_str=start_date,end_str=end_date)
+    
+    elif table == "daily":
+        data = client.get_historical_klines(symbol=f'{coin}USDT',interval=Client.KLINE_INTERVAL_1DAY,start_str=start_date,end_str=end_date)  
+    
+    else:
+        print('error')
+    
+
     cols = ['date_and_time','open','high','low','close','volume','close_time','quote_asset_volume','number_of_trades','TBBAV','TBQAV','dropme']
     df = pd.DataFrame(data,columns=cols)
     df.drop(['dropme'], inplace = True, axis = 1)
@@ -730,7 +785,7 @@ def download_data_for_automated_updating(coin, start_date, end_date):
 
 
 
-def update_all_coins(db_file):
+def update_all_coins(db_file,table):
     '''
     Function that will update data for all coins in the database to the current day
     '''
@@ -738,14 +793,23 @@ def update_all_coins(db_file):
     now = now.strftime("%Y/%m/%d")
     
     #put this before you open the database otherwise you might get weird results since this will also open and close the db
-    coins_in_db = check_unique_db(db_file)
+
+    
+
+    if table == "daily":
+        table = "daily_historical_coin_data"
+    elif table == "minute":
+        table = "historical_coin_data"
+    
+    coins_in_db = check_unique_db(db_file,table)
     
     con = sqlite3.connect(db_file)
     cur = con.cursor()
 
+    
     for coin in coins_in_db:
         #query that selects the most recent date
-        query = f"SELECT date FROM historical_coin_data WHERE coin == '{coin}' ORDER BY date DESC LIMIT 1";
+        query = f"SELECT date FROM {table} WHERE coin == '{coin}' ORDER BY date DESC LIMIT 1";
         #execute query
         cur=con.execute(query)
 
@@ -764,9 +828,9 @@ def update_all_coins(db_file):
         max_date_minus_1 = max_date_minus_1 - timedelta(days=1)
         max_date_minus_1 = max_date_minus_1.strftime("%Y-%m-%d")
 
-        df = download_data_for_automated_updating(coin,max_date_minus_1,now)
+        df = download_data_for_automated_updating(coin,max_date_minus_1,now,table)
 
-        update_database(db_file,df)
+        update_database(db_file,df,table)
 
 
 
